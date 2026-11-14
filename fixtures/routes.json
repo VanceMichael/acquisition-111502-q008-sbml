@@ -1,0 +1,11 @@
+{
+  "/files/model.xml": {
+    "file": "model.xml",
+    "mediaType": "application/xml",
+    "partialFile": "model.xml.partial"
+  },
+  "/deliveries": {
+    "file": "delivery.json",
+    "mediaType": "application/json"
+  }
+}

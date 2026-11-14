@@ -1,0 +1,15 @@
+{
+  "deliveryId": "delivery-1",
+  "revision": "r1",
+  "roots": [
+    {
+      "href": "/files/model.xml"
+    }
+  ],
+  "resources": [
+    {
+      "href": "/files/model.xml",
+      "name": "model.xml"
+    }
+  ]
+}

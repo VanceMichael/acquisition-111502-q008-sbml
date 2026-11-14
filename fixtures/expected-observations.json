@@ -1,0 +1,34 @@
+[
+  {
+    "kind": "species",
+    "value": {
+      "id": "S1",
+      "compartment": "cyt",
+      "initialKind": "concentration"
+    }
+  },
+  {
+    "kind": "species",
+    "value": {
+      "id": "S2",
+      "compartment": "mit",
+      "initialKind": "amount"
+    }
+  },
+  {
+    "kind": "parameter",
+    "value": {
+      "id": "k",
+      "scope": "reaction:r1",
+      "value": "0.4"
+    }
+  },
+  {
+    "kind": "parameter",
+    "value": {
+      "id": "k",
+      "scope": "model",
+      "value": "1"
+    }
+  }
+]
