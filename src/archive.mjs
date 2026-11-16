@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 export function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -97,6 +98,20 @@ export class Archive {
 
   async addRecord(collectionId, record) {
     identifier(collectionId);
+    await this.validateRecord(collectionId, record);
+    return this.serialized(async () => {
+      const collection = await this.collection(collectionId);
+      const match = collection.records.find(existing => existing.kind === record.kind && existing.key === record.key);
+      if (match && JSON.stringify(match) !== JSON.stringify(record)) {
+        throw Object.assign(new Error('record_identity_conflict'), { status: 409 });
+      }
+      if (!match) collection.records.push(record);
+      await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+      return record;
+    });
+  }
+
+  async validateRecord(collectionId, record) {
     if (!record || typeof record.kind !== 'string' || typeof record.key !== 'string' || !record.value || typeof record.value !== 'object') {
       throw Object.assign(new Error('invalid_record'), { status: 400 });
     }
@@ -109,15 +124,54 @@ export class Archive {
         throw Object.assign(new Error('provenance_scope'), { status: 400 });
       }
     }
+  }
+
+  async validateIssue(collectionId, issue) {
+    if (!issue || typeof issue.reason !== 'string' || !issue.reason || typeof issue.location !== 'string' || !issue.location) {
+      throw Object.assign(new Error('invalid_issue'), { status: 400 });
+    }
+    if (issue.receiptId !== undefined) {
+      const receipt = await this.receipt(issue.receiptId);
+      if (receipt.collectionId !== collectionId) {
+        throw Object.assign(new Error('provenance_scope'), { status: 400 });
+      }
+    }
+  }
+
+  // 自动解释入库：同键同值幂等合并出处；同键异值不覆盖已归档记录，
+  // 记为 record_identity_conflict 问题，历次修订的原文收件各自保留、可追溯。
+  async applyInterpretation(collectionId, { records = [], issues = [] }) {
+    identifier(collectionId);
+    for (const record of records) await this.validateRecord(collectionId, record);
+    for (const issue of issues) await this.validateIssue(collectionId, issue);
     return this.serialized(async () => {
       const collection = await this.collection(collectionId);
-      const match = collection.records.find(existing => existing.kind === record.kind && existing.key === record.key);
-      if (match && JSON.stringify(match) !== JSON.stringify(record)) {
-        throw Object.assign(new Error('record_identity_conflict'), { status: 409 });
+      for (const record of records) {
+        const match = collection.records.find(existing => existing.kind === record.kind && existing.key === record.key);
+        if (!match) {
+          collection.records.push(record);
+          continue;
+        }
+        if (isDeepStrictEqual(match.value, record.value)) {
+          for (const origin of record.provenance) {
+            const known = match.provenance.some(existing => existing.receiptId === origin.receiptId && existing.location === origin.location);
+            if (!known) match.provenance.push(origin);
+          }
+          continue;
+        }
+        const conflict = {
+          reason: 'record_identity_conflict',
+          location: record.provenance[0].location,
+          receiptId: record.provenance[0].receiptId,
+          detail: { kind: record.kind, key: record.key }
+        };
+        if (!collection.issues.some(existing => isDeepStrictEqual(existing, conflict))) collection.issues.push(conflict);
       }
-      if (!match) collection.records.push(record);
+      for (const issue of issues) {
+        if (!collection.issues.some(existing => isDeepStrictEqual(existing, issue))) collection.issues.push(issue);
+      }
       await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
-      return record;
+      return collection;
     });
   }
 
