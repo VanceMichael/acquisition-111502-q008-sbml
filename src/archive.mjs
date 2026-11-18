@@ -115,9 +115,32 @@ export class Archive {
       if (match && JSON.stringify(match) !== JSON.stringify(record)) {
         throw Object.assign(new Error('record_identity_conflict'), { status: 409 });
       }
-      if (!match) collection.records.push(record);
-      await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+      // 同键同内容（如重复接入同一修订）幂等，不重复登记，也不改动已归档原文。
+      if (!match) {
+        collection.records.push(record);
+        await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+      }
       return record;
+    });
+  }
+
+  async addIssue(collectionId, issue) {
+    identifier(collectionId);
+    if (!issue || typeof issue.reason !== 'string' || !issue.reason || typeof issue.location !== 'string' || !issue.location) {
+      throw Object.assign(new Error('invalid_issue'), { status: 400 });
+    }
+    if (issue.receiptId !== null && issue.receiptId !== undefined) {
+      const receipt = await this.receipt(issue.receiptId);
+      if (receipt.collectionId !== collectionId) throw Object.assign(new Error('provenance_scope'), { status: 400 });
+    }
+    return this.serialized(async () => {
+      const collection = await this.collection(collectionId);
+      const signature = JSON.stringify(issue);
+      if (!collection.issues.some(existing => JSON.stringify(existing) === signature)) {
+        collection.issues.push(issue);
+        await this.saveJson(join(this.directory, 'collections', collectionId + '.json'), collection);
+      }
+      return issue;
     });
   }
 

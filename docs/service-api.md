@@ -2,7 +2,7 @@
 
 人工资料接收保持兼容。POST /intakes 的 JSON 字段为 collectionId、sourceKey、revision、mediaType、contentBase64；返回 receiptId、sha256、byteLength 和轻量 summary。相同资料集、来源键与修订对应同一收件，字节不同返回 409。GET /receipts/{receiptId} 可读元数据，GET /receipts/{receiptId}/body 返回原字节。
 
-POST /acquisitions 接受 collectionId、entry 和可选 options，entry 是授权来源完整地址。当前只领取入口的原始内容并登记收件，返回 collectionId 和 receiptIds。自动解释沿用此入口，所有自动取得的依赖也应保留真实原文收件，不用人工造 records 代替自动接入。来源访问只限启动时冻结的 origin，不能访问其他主机或执行交付件。
+POST /acquisitions 接受 collectionId、entry 和可选 options，entry 是授权来源完整地址。入口本身先登记为原始收件；若入口是交付索引（含 deliveryId 与 roots），则领取其中全部 roots 与 resources，每个自动取得的依赖都保留真实原文收件，再仅对 roots 做 SBML L3V2 core 结构化解释并写入 records/issues；resources 只保留原文收件。入口不是交付索引时，把入口自身作为唯一 root 解释。自动接入不依赖操作者事先写入答案，不用人工造 records 代替自动接入。来源访问只限启动时冻结的 origin，不能访问其他主机或执行交付件；依赖领取失败、root 格式不受支持或记录键冲突都会登记为带出处的 issue，请求仍返回已取得的 receiptIds。
 
 GET /collections 返回资料集列表，GET /collections/{collectionId} 返回 collectionId、receiptIds、records、issues。结构化 records 的每项包含 kind、key、value、provenance；key 由各来源身份语义决定，不要求特定内部编码。provenance 是含 receiptId 与 location 的数组，location 可采用字节区间、原行列、JSON Pointer 等可复查定位。issues 每项包含 reason、location，至少能说明原因、受影响范围和已有来源依据，不能用静默丢弃表示未知。缺失资料不等于来源明确删除。
 
